@@ -9,13 +9,14 @@ class Table
 public:
     std::string name;
     std::vector<std::string> columns;
+    std::vector<std::string> columnTypes;
     std::vector<std::vector<std::string>> data;
-
-    Table(const std::string& name, const std::vector<std::string>& columns)
-        : name(name), columns(columns) {}
+    Table()=default;
+    Table(const std::string& name, const std::vector<std::string>& columns, const std::vector<std::string>& columnTypes);
     void addRow(const std::vector<std::string>& row);
     void saveToFile(const std::string& outputFile) const;
     void loadFromFile(const std::string& inputFile);
+    void saveToCSV(const std::string& outputFile) const;
 };
 
 #endif
