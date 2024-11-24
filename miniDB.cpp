@@ -31,13 +31,34 @@ void miniDB::UseDataBase(const string& dbname)
 }
 
 // 创建表
+// 创建表
 void miniDB::CreateTable(const string& tableName, const vector<string>& columns, const vector<string>& columnTypes) 
 {
     tables[tableName] = Table(tableName, columns, columnTypes);
-    cout << "Table " << tableName << " created" << endl;
-}
+    
+    // 创建CSV文件
+    ofstream file(tableName + ".csv");
+    if (!file.is_open()) 
+    {
+        cerr << "Error: Could not create file: " << tableName << ".csv" << endl;
+        return;
+    }
 
-// 删除表
+    // 写入列名和列类型
+    for (int i = 0; i < columns.size(); ++i) 
+    {
+        file << columns[i];
+        if (i < columns.size() - 1) 
+        {
+            file << ",";
+        }
+    }
+    file << endl;
+
+    file.close();
+    cout << "Table " << tableName << " created and saved to " << tableName << ".csv" << endl;
+}
+//删除表
 void miniDB::DropTable(const string& tableName) 
 {
     tables.erase(tableName);
@@ -151,39 +172,84 @@ void miniDB::SelectAllColumnsFromTable(const string& tableName)
 }
 
 // 从表中选择带有条件的数据
-void miniDB::SelectFromTableWithCondition(const std::string& tableName, const std::string& column, const std::string& condition)
+void miniDB::SelectFromTableWithConditions(const std::string& tableName, const std::string& columns, const std::string& conditions)
 {
-    if(tables.find(tableName) != tables.end())
+    if (tables.find(tableName) != tables.end()) 
     {
         const Table& table = tables[tableName];
-        auto it = find(table.columns.begin(), table.columns.end(), column);
-        if(it != table.columns.end())
+        vector<int> columnIndices;
+        for (const auto& col : columns) 
         {
-            int columnIndex = distance(table.columns.begin(), it);
-            for(const auto& col : table.columns)
+            auto it = find(table.columns.begin(), table.columns.end(), col);
+            if (it != table.columns.end()) 
             {
-                cout << col << " ";
+                columnIndices.push_back(distance(table.columns.begin(), it));
+            } 
+            else 
+            {
+                cout << "Column " << col << " does not exist in table " << tableName << endl;
+                return;
             }
-            cout << endl;
-            for(const auto& row : table.data)
+        }
+
+        // 解析条件
+        vector<pair<string, string>> conditionPairs;
+        istringstream condStream(conditions);
+        string cond;
+        while (getline(condStream, cond, ' ')) 
+        {
+            if (cond == "AND" || cond == "OR") 
             {
-                if(row[columnIndex] == condition)
+                conditionPairs.push_back({cond, ""});
+            }
+            else 
+            {
+                size_t pos = cond.find_first_of("><=");
+                if (pos != string::npos) 
                 {
-                    for(const auto& cell : row)
-                    {
-                        cout << cell << " ";
-                    }
-                    cout << endl;
+                    string column = cond.substr(0, pos);
+                    string value = cond.substr(pos);
+                    conditionPairs.push_back({column, value});
                 }
             }
         }
-        else
-        {
-            cout << "Column " << column << " does not exist in table " << tableName << endl;
+
+        // 写入列名
+        for (const auto& col : columns) {
+            cout << col << " ";
         }
-    }
-    else
-    {
+        cout << endl;
+
+        // 写入数据行
+        for (const auto& row : table.data) {
+            bool match = true;
+            for (const auto& condPair : conditionPairs) {
+                if (condPair.first == "AND" || condPair.first == "OR") {
+                    continue;
+                }
+                auto it = find(table.columns.begin(), table.columns.end(), condPair.first);
+                if (it != table.columns.end()) {
+                    int index = distance(table.columns.begin(), it);
+                    string value = row[index];
+                    string condValue = condPair.second.substr(1);
+                    char op = condPair.second[0];
+                    if (op == '>' && !(stof(value) > stof(condValue))) {
+                        match = false;
+                    } else if (op == '<' && !(stof(value) < stof(condValue))) {
+                        match = false;
+                    } else if (op == '=' && !(value == condValue)) {
+                        match = false;
+                    }
+                }
+            }
+            if (match) {
+                for (const auto& index : columnIndices) {
+                    cout << row[index] << " ";
+                }
+                cout << endl;
+            }
+        }
+    } else {
         cout << "Table " << tableName << " does not exist" << endl;
     }
 }
@@ -296,6 +362,15 @@ void miniDB::SelectColumnsFromTableToCSV(const string& tableName, const vector<s
     }
 }
 
+string removeSuffix(const string& str, const string& suffix) 
+{
+    if (str.size() >= suffix.size() && str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0) 
+    {
+        return str.substr(0, str.size() - suffix.size());
+    }
+    return str;
+}
+
 // 解析并执行命令
 void parseCommand(const string& command, miniDB& db, const string& outputFile) 
 {
@@ -304,6 +379,7 @@ void parseCommand(const string& command, miniDB& db, const string& outputFile)
     string token;
     while (iss >> token) 
     {
+        token = removeSuffix(token, ";");
         tokens.push_back(token);
     }
 
@@ -322,13 +398,24 @@ void parseCommand(const string& command, miniDB& db, const string& outputFile)
             string tableName = tokens[2];
             vector<string> columns;
             vector<string> columnTypes;
-            for (size_t i = 3; i < tokens.size(); i += 2) 
+            size_t start = command.find("(");
+            size_t end = command.find(")");
+            if (start != string::npos && end != string::npos) 
             {
-                columns.push_back(tokens[i]);
-                columnTypes.push_back(tokens[i + 1]);
+                string columnsStr = command.substr(start + 1, end - start - 1);
+                istringstream columnsStream(columnsStr);
+                string col;
+                while (getline(columnsStream, col, ',')) 
+                {
+                    istringstream colStream(col);
+                    string colName, colType;
+                    colStream >> colName >> colType;
+                    columns.push_back(colName);
+                    columnTypes.push_back(colType);
+                }
             }
             db.CreateTable(tableName, columns, columnTypes);
-        } 
+        }
         else if (tokens[0] == "INSERT" && tokens[1] == "INTO") 
         {
             string tableName = tokens[2];
@@ -359,10 +446,22 @@ void parseCommand(const string& command, miniDB& db, const string& outputFile)
         else if (tokens[0] == "SELECT")
         {
             size_t fromPos = find(tokens.begin(), tokens.end(), "FROM") - tokens.begin();
+            size_t wherePos = find(tokens.begin(), tokens.end(), "WHERE") - tokens.begin();
             if (fromPos != tokens.size()) 
             {
                 string tableName = tokens[fromPos + 1];
-                if (tokens[1] == "*") 
+                if (wherePos != tokens.size()) 
+                {
+                    string columns = tokens[1];
+                    string conditions;
+                    for (size_t i = wherePos + 1; i < tokens.size(); ++i) 
+                    {
+                        conditions += tokens[i];
+                        conditions += " ";
+                    }
+                    db.SelectFromTableWithConditions(tableName, columns, conditions);
+                } 
+                else if (tokens[1] == "*") 
                 {
                     db.SelectAllColumnsFromTable(tableName);
                 } 
@@ -376,7 +475,7 @@ void parseCommand(const string& command, miniDB& db, const string& outputFile)
             {
                 cout << "Invalid SELECT command" << endl;
             }
-        } 
+        }      
         else if (tokens[0] == "SAVE" && tokens[1] == "TABLE") 
         {
             db.SaveTable(tokens[2], outputFile);

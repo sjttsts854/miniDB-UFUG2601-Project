@@ -4,6 +4,7 @@
 #include "Table.h"
 #include <map>
 #include <string>
+#include <vector>
 
 // miniDB 类表示一个简单的数据库管理系统
 class miniDB 
@@ -39,8 +40,8 @@ public:
     void SelectAllColumnsFromTable(const std::string& tableName);
 
     //从表中选择带有条件的数据
-    void SelectFromTableWithCondition(const std::string& tableName, const std::string& column, const std::string& condition);
-    
+    void SelectFromTableWithConditions(const std::string& tableName, const std::string& columns, const std::string& conditions);
+
     // 将表数据保存到文件
     void SaveTable(const std::string& tableName, const std::string& outputFile);
 
