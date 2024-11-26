@@ -9,8 +9,7 @@
 
 using namespace std;
 
-// 构造函数
-miniDB::miniDB() {}
+
 
 // 创建数据库
 void miniDB::CreateDataBase(const string& dbname) 
@@ -18,7 +17,6 @@ void miniDB::CreateDataBase(const string& dbname)
     string dir = "mkdir " + dbname;
     const char* d = dir.c_str();
     system(d);
-    cout << "Database " << dbname << " created" << endl;
 }
 
 // 使用数据库
@@ -27,10 +25,8 @@ void miniDB::UseDataBase(const string& dbname)
     string dir = "cd " + dbname;
     const char* d = dir.c_str();
     system(d);
-    cout << "Using database " << dbname << endl;
 }
 
-// 创建表
 // 创建表
 void miniDB::CreateTable(const string& tableName, const vector<string>& columns, const vector<string>& columnTypes) 
 {
@@ -56,13 +52,14 @@ void miniDB::CreateTable(const string& tableName, const vector<string>& columns,
     file << endl;
 
     file.close();
-    cout << "Table " << tableName << " created and saved to " << tableName << ".csv" << endl;
 }
+
 //删除表
 void miniDB::DropTable(const string& tableName) 
 {
     tables.erase(tableName);
-    cout << "Table " << tableName << " dropped" << endl;
+    string file = tableName + ".csv";
+    remove(file.c_str());
 }
 
 // 向表中插入数据
@@ -71,33 +68,34 @@ void miniDB::InsertIntoTable(const string& tableName, const vector<string>& row)
     if (tables.find(tableName) != tables.end()) 
     {
         tables[tableName].addRow(row);
-        cout << "Row inserted into table " << tableName << endl;
-    } 
-    else 
-    {
-        cout << "Table " << tableName << " does not exist" << endl;
-    }
-}
-
-// 从表中选择数据
-void miniDB::SelectFromTable(const string& tableName) 
-{
-    if (tables.find(tableName) != tables.end()) 
-    {
-        const Table& table = tables[tableName];
-        for (const auto& col : table.columns) 
+        ofstream file(tableName + ".csv", ios::app);
+        if (!file.is_open()) 
         {
-            cout << col << " ";
+            cerr << "Error: Could not open file for writing: " << tableName << ".csv" << endl;
+            return;
         }
-        cout << endl;
-        for (const auto& row : table.data) 
+        for (int i = 0; i < row.size(); ++i) 
         {
-            for (const auto& cell : row) 
+            if (tables[tableName].columnTypes[i] == "TEXT") 
             {
-                cout << cell << " ";
+                file << "'" << row[i] << "'";
             }
-            cout << endl;
+            else if(tables[tableName].columnTypes[i] == "FLOAT")
+            {
+                file << fixed << setprecision(2) << stof(row[i]);
+            }
+            else
+            {
+                file << row[i];
+            }
+
+            if (i < row.size() - 1) 
+            {
+                file << ",";
+            }
         }
+        file << endl;
+        file.close();
     } 
     else 
     {
@@ -106,8 +104,9 @@ void miniDB::SelectFromTable(const string& tableName)
 }
 
 // 从表中选择特定列的数据
-void miniDB::SelectColumnsFromTable(const string& tableName, const vector<string>& columns) 
+void miniDB::SelectColumnsFromTable(const string& tableName, const vector<string>& columns, const string& outputFile) 
 {
+    static bool FirstWrite = true;
     if (tables.find(tableName) != tables.end()) 
     {
         const Table& table = tables[tableName];
@@ -125,19 +124,60 @@ void miniDB::SelectColumnsFromTable(const string& tableName, const vector<string
                 return;
             }
         }
-        for (const auto& col : columns) 
+
+        // 打开输出文件
+        ofstream file(outputFile, ios::out | ios::app);
+
+        if (!file.is_open()) 
         {
-            cout << col << " ";
+            cerr << "Error: Could not open file: " << outputFile << endl;
+            return;
         }
-        cout << endl;
+
+        if (!FirstWrite) 
+        {
+            file << "---" << endl;
+        }
+        FirstWrite = false;
+
+        // 写入列名
+        for (size_t i = 0; i < columns.size(); ++i) 
+        {
+            file << columns[i];
+            if (i < columns.size() - 1) 
+            {
+                file << ",";
+            }
+        }
+        file << endl;
+
+        // 写入数据行
         for (const auto& row : table.data) 
         {
-            for (const auto& index : columnIndices) 
+            for (size_t i = 0; i < columnIndices.size(); ++i) 
             {
-                cout << row[index] << " ";
+                int colIndex = columnIndices[i];
+                if (table.columnTypes[colIndex] == "TEXT") 
+                {
+                    file << "'" << row[colIndex] << "'";
+                } 
+                else if (table.columnTypes[colIndex] == "FLOAT") 
+                {
+                    file << std::fixed << std::setprecision(2) << stof(row[colIndex]);
+                } 
+                else 
+                {
+                    file << row[colIndex];
+                }
+                if (i < columnIndices.size() - 1) 
+                {
+                    file << ",";
+                }
             }
-            cout << endl;
+            file << endl;
         }
+
+        file.close();
     } 
     else 
     {
@@ -146,24 +186,66 @@ void miniDB::SelectColumnsFromTable(const string& tableName, const vector<string
 }
 
 // 从表中选择所有列的数据
-void miniDB::SelectAllColumnsFromTable(const string& tableName) 
+void miniDB::SelectAllColumnsFromTable(const string& tableName, const string& outputFile) 
 {
+    static bool FirstWrite = true;
     if (tables.find(tableName) != tables.end()) 
     {
         const Table& table = tables[tableName];
-        for (const auto& col : table.columns) 
+
+        // 打开输出文件
+        ofstream file(outputFile, ios::out | ios::app);
+
+        if (!file.is_open()) 
         {
-            cout << col << " ";
+            cerr << "Error: Could not open file: " << outputFile << endl;
+            return;
         }
-        cout << endl;
+
+        if (!FirstWrite) 
+        {
+            file << "---" << endl;
+        }
+        FirstWrite = false;
+        
+        // 写入列名
+        for (size_t i = 0; i < table.columns.size(); ++i) 
+        {
+            file << table.columns[i];
+            if (i < table.columns.size() - 1) 
+            {
+                file << ",";
+            }
+        }
+        file << endl;
+
+        // 写入数据行
         for (const auto& row : table.data) 
         {
-            for (const auto& cell : row) 
+            for (size_t i = 0; i < row.size(); ++i) 
             {
-                cout << cell << " ";
+                if (table.columnTypes[i] == "TEXT") 
+                {
+                    file << "'" << row[i] << "'";
+                } 
+                else if (table.columnTypes[i] == "FLOAT") 
+                {
+                    file << std::fixed << std::setprecision(2) << stof(row[i]);
+                } 
+                else 
+                {
+                    file << row[i];
+                }
+                if (i < row.size() - 1) 
+                {
+                    file << ",";
+                }
             }
-            cout << endl;
+            file << endl;
         }
+
+        file.close();
+        
     } 
     else 
     {
@@ -172,8 +254,9 @@ void miniDB::SelectAllColumnsFromTable(const string& tableName)
 }
 
 // 从表中选择带有条件的数据
-void miniDB::SelectFromTableWithConditions(const std::string& tableName, const std::string& columns, const std::string& conditions)
+void miniDB::SelectFromTableWithConditions(const std::string& tableName, const std::vector<std::string>& columns, const std::string& conditions, const std::string& outputFile)
 {
+    static bool FirstWrite = true;
     if (tables.find(tableName) != tables.end()) 
     {
         const Table& table = tables[tableName];
@@ -201,122 +284,34 @@ void miniDB::SelectFromTableWithConditions(const std::string& tableName, const s
             if (cond == "AND" || cond == "OR") 
             {
                 conditionPairs.push_back({cond, ""});
-            }
-            else 
-            {
-                size_t pos = cond.find_first_of("><=");
-                if (pos != string::npos) 
-                {
-                    string column = cond.substr(0, pos);
-                    string value = cond.substr(pos);
-                    conditionPairs.push_back({column, value});
-                }
-            }
-        }
-
-        // 写入列名
-        for (const auto& col : columns) {
-            cout << col << " ";
-        }
-        cout << endl;
-
-        // 写入数据行
-        for (const auto& row : table.data) {
-            bool match = true;
-            for (const auto& condPair : conditionPairs) {
-                if (condPair.first == "AND" || condPair.first == "OR") {
-                    continue;
-                }
-                auto it = find(table.columns.begin(), table.columns.end(), condPair.first);
-                if (it != table.columns.end()) {
-                    int index = distance(table.columns.begin(), it);
-                    string value = row[index];
-                    string condValue = condPair.second.substr(1);
-                    char op = condPair.second[0];
-                    if (op == '>' && !(stof(value) > stof(condValue))) {
-                        match = false;
-                    } else if (op == '<' && !(stof(value) < stof(condValue))) {
-                        match = false;
-                    } else if (op == '=' && !(value == condValue)) {
-                        match = false;
-                    }
-                }
-            }
-            if (match) {
-                for (const auto& index : columnIndices) {
-                    cout << row[index] << " ";
-                }
-                cout << endl;
-            }
-        }
-    } else {
-        cout << "Table " << tableName << " does not exist" << endl;
-    }
-}
-// 将表数据保存到文件
-void miniDB::SaveTable(const string& tableName, const string& outputFile) 
-{
-    if (tables.find(tableName) != tables.end()) 
-    {
-        tables[tableName].saveToFile(outputFile);
-        cout << "Table " << tableName << " saved to " << outputFile << endl;
-    } 
-    else 
-    {
-        cout << "Table " << tableName << " does not exist" << endl;
-    }
-}
-
-// 从文件加载表数据
-void miniDB::LoadTable(const string& tableName, const string& inputFile) 
-{
-    Table table(tableName, {}, {});
-    table.loadFromFile(inputFile);
-    tables[tableName] = table;
-    cout << "Table " << tableName << " loaded from " << inputFile << endl;
-}
-
-// 将表数据保存为 CSV 文件
-void miniDB::SaveTableToCSV(const string& tableName, const string& outputFile) 
-{
-    if (tables.find(tableName) != tables.end()) 
-    {
-        tables[tableName].saveToCSV(outputFile);
-        cout << "Table " << tableName << " saved to CSV file " << outputFile << endl;
-    } 
-    else 
-    {
-        cout << "Table " << tableName << " does not exist" << endl;
-    }
-}
-
-// 将查询结果保存为 CSV 文件
-void miniDB::SelectColumnsFromTableToCSV(const string& tableName, const vector<string>& columns, const string& outputFile) 
-{
-    if (tables.find(tableName) != tables.end()) 
-    {
-        const Table& table = tables[tableName];
-        vector<int> columnIndices;
-        for (const auto& col : columns) 
-        {
-            auto it = find(table.columns.begin(), table.columns.end(), col);
-            if (it != table.columns.end()) 
-            {
-                columnIndices.push_back(distance(table.columns.begin(), it));
             } 
             else 
             {
-                cout << "Column " << col << " does not exist in table " << tableName << endl;
-                return;
+                size_t opPos = cond.find_first_of("><=");
+                if (opPos != string::npos) 
+                {
+                    string colName = cond.substr(0, opPos);
+                    string op = cond.substr(opPos, 1);
+                    string value = cond.substr(opPos + 1);
+                    conditionPairs.push_back({colName, op + value});
+                }
             }
         }
 
-        ofstream file(outputFile);
+        // 打开输出文件
+        ofstream file(outputFile, ios::out | ios::app);
+
         if (!file.is_open()) 
         {
-            cerr << "Error: Could not open file for writing: " << outputFile << endl;
+            cerr << "Error: Could not open file: " << outputFile << endl;
             return;
         }
+
+        if (!FirstWrite) 
+        {
+            file << "---" << endl;
+        }
+        FirstWrite = false;
 
         // 写入列名
         for (size_t i = 0; i < columns.size(); ++i) 
@@ -330,37 +325,68 @@ void miniDB::SelectColumnsFromTableToCSV(const string& tableName, const vector<s
         file << endl;
 
         // 写入数据行
-        for (const auto& row : table.data) {
-            for (size_t i = 0; i < columnIndices.size(); ++i) 
+        for (const auto& row : table.data) 
+        {
+            bool match = true;
+            for (const auto& condPair : conditionPairs) 
             {
-                int index = columnIndices[i];
-                if (table.columnTypes[index] == "TEXT") 
+                auto it = find(table.columns.begin(), table.columns.end(), condPair.first);
+                if (it != table.columns.end()) 
                 {
-                    file << "\"" << row[index] << "\"";
-                } 
-                else if (table.columnTypes[index] == "FLOAT") 
-                {
-                    file << fixed << setprecision(2) << stof(row[index]);
-                } 
-                else 
-                {
-                    file << row[index];
-                }
-                if (i < columnIndices.size() - 1) 
-                {
-                    file << ",";
+                    int index = distance(table.columns.begin(), it);
+                    string value = row[index];
+                    string condValue = condPair.second.substr(1);
+                    char op = condPair.second[0];
+                    if (op == '>' && !(stof(value) > stof(condValue))) 
+                    {
+                        match = false;
+                    } 
+                    else if (op == '<' && !(stof(value) < stof(condValue))) 
+                    {
+                        match = false;
+                    } 
+                    else if (op == '=' && !(value == condValue)) 
+                    {
+                        match = false;
+                    }
                 }
             }
-            file << endl;
+            if (match) 
+            {
+                for (size_t i = 0; i < columnIndices.size(); ++i) 
+                {
+                    if (table.columnTypes[columnIndices[i]] == "TEXT") 
+                    {
+                        file << "'" << row[columnIndices[i]] << "'";
+                    } 
+                    else if (table.columnTypes[columnIndices[i]] == "FLOAT") 
+                    {
+                        file << std::fixed << std::setprecision(2) << stof(row[columnIndices[i]]);
+                    } 
+                    else 
+                    {
+                        file << row[columnIndices[i]];
+                    }
+                    if (i < columnIndices.size() - 1) 
+                    {
+                        file << ",";
+                    }
+                }
+                file << endl;
+            }
         }
 
         file.close();
+        
     } 
     else 
     {
         cout << "Table " << tableName << " does not exist" << endl;
     }
 }
+
+
+
 
 string removeSuffix(const string& str, const string& suffix) 
 {
@@ -443,7 +469,7 @@ void parseCommand(const string& command, miniDB& db, const string& outputFile)
                 cout << "Invalid INSERT INTO command" << endl;
             }
         } 
-        else if (tokens[0] == "SELECT")
+        else if (tokens[0] == "SELECT") 
         {
             size_t fromPos = find(tokens.begin(), tokens.end(), "FROM") - tokens.begin();
             size_t wherePos = find(tokens.begin(), tokens.end(), "WHERE") - tokens.begin();
@@ -452,42 +478,40 @@ void parseCommand(const string& command, miniDB& db, const string& outputFile)
                 string tableName = tokens[fromPos + 1];
                 if (wherePos != tokens.size()) 
                 {
-                    string columns = tokens[1];
+                    vector<string> columns(tokens.begin() + 1, tokens.begin() + fromPos);
+                    // 去掉列名中的逗号
+                    for (auto& col : columns) 
+                    {
+                        col.erase(remove(col.begin(), col.end(), ','), col.end());
+                    }
                     string conditions;
                     for (size_t i = wherePos + 1; i < tokens.size(); ++i) 
                     {
                         conditions += tokens[i];
                         conditions += " ";
                     }
-                    db.SelectFromTableWithConditions(tableName, columns, conditions);
+                    db.SelectFromTableWithConditions(tableName, columns, conditions, outputFile);
                 } 
                 else if (tokens[1] == "*") 
                 {
-                    db.SelectAllColumnsFromTable(tableName);
+                    db.SelectAllColumnsFromTable(tableName, outputFile);
                 } 
                 else 
                 {
                     vector<string> columns(tokens.begin() + 1, tokens.begin() + fromPos);
-                    db.SelectColumnsFromTableToCSV(tableName, columns, outputFile);
+                    // 去掉列名中的逗号
+                    for (auto& col : columns) 
+                    {
+                        col.erase(remove(col.begin(), col.end(), ','), col.end());
+                    }
+                    db.SelectColumnsFromTable(tableName, columns, outputFile);
                 }
             }
             else 
             {
                 cout << "Invalid SELECT command" << endl;
             }
-        }      
-        else if (tokens[0] == "SAVE" && tokens[1] == "TABLE") 
-        {
-            db.SaveTable(tokens[2], outputFile);
-        } 
-        else if (tokens[0] == "LOAD" && tokens[1] == "TABLE") 
-        {
-            db.LoadTable(tokens[2], tokens[3]);
-        } 
-        else if (tokens[0] == "SAVE" && tokens[1] == "TABLETOCSV") 
-        {
-            db.SaveTableToCSV(tokens[2], outputFile);
-        } 
+        }
         else 
         {
             cout << "Unknown command" << endl;

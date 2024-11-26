@@ -34,7 +34,7 @@ public:
     void SelectFromTable(const std::string& tableName);
 
     // 从表中选择特定列的数据
-    void SelectColumnsFromTable(const std::string& tableName, const std::vector<std::string>& columns);
+    void SelectColumnsFromTable(const string& tableName, const vector<string>& columns, const string& outputFile);
 
     //从表中选择所有列的数据
     void SelectAllColumnsFromTable(const std::string& tableName);
