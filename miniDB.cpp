@@ -6,11 +6,105 @@
 #include <iomanip>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <dirent.h>
 
 using namespace std;
 
+bool FirstWrite = true;
 
+string DBpath;
 
+// 从文件加载表
+void miniDB::LoadAllTables(const string& path)
+{
+    DIR* dir;
+    struct dirent* ent;
+    if ((dir = opendir(path.c_str())) != NULL) 
+    {
+        // 遍历目录中的所有文件
+        while ((ent = readdir(dir)) != NULL) 
+        {
+            string fileName = ent->d_name;
+            // 检查文件扩展名是否为 .csv
+            if (fileName.size() > 4 && fileName.substr(fileName.size() - 4) == ".csv") 
+            {
+                string tableName = fileName.substr(0, fileName.size() - 4);
+                string filePath = path + "/" + fileName;
+                ifstream file(filePath);
+                if (!file.is_open()) 
+                {
+                    cerr << "Error: Could not open file: " << filePath << endl;
+                    continue;
+                }
+
+                // 读取列名
+                string line;
+                getline(file, line);
+                istringstream columnsStream(line);
+                vector<string> columns;
+                string col;
+                while (getline(columnsStream, col, ',')) 
+                {
+                    columns.push_back(col);
+                }
+
+                // 创建表并加载数据
+                vector<string> columnTypes(columns.size(), "TEXT"); // 默认所有列类型为 TEXT
+                Table table(tableName, columns, columnTypes);
+
+                // 读取数据行并确定列类型
+                while (getline(file, line)) 
+                {
+                    istringstream rowStream(line);
+                    vector<string> row;
+                    string cell;
+                    size_t colIndex = 0;
+                    while (getline(rowStream, cell, ',')) 
+                    {
+                        row.push_back(cell);
+                        // 确定列类型
+                        if (columnTypes[colIndex] == "TEXT") 
+                        {
+                            try 
+                            {
+                                size_t pos;
+                                int intValue = stoi(cell, &pos);
+                                if (pos == cell.size()) 
+                                {
+                                    columnTypes[colIndex] = "INTEGER";
+                                } 
+                                else 
+                                {
+                                    float floatValue = stof(cell, &pos);
+                                    if (pos == cell.size()) 
+                                    {
+                                        columnTypes[colIndex] = "FLOAT";
+                                    }
+                                }
+                            } 
+                            catch (const invalid_argument&) 
+                            {
+                                // 转换失败，保持为 TEXT
+                            }
+                        }
+                        colIndex++;
+                    }
+                    table.addRow(row);
+                }
+
+                // 更新表的列类型
+                table.columnTypes = columnTypes;
+                tables[tableName] = table;
+                file.close();
+            }
+        }
+        closedir(dir);
+    } 
+    else 
+    {
+        cerr << "Error: Could not open directory: " << path << endl;
+    }
+}
 // 创建数据库
 void miniDB::CreateDataBase(const string& dbname) 
 {
@@ -22,9 +116,10 @@ void miniDB::CreateDataBase(const string& dbname)
 // 使用数据库
 void miniDB::UseDataBase(const string& dbname) 
 {
-    string dir = "cd " + dbname;
-    const char* d = dir.c_str();
-    system(d);
+    currentDB = dbname;
+    DBpath = dbname ;
+    LoadAllTables(DBpath);
+    DBpath += "/";
 }
 
 // 创建表
@@ -33,7 +128,7 @@ void miniDB::CreateTable(const string& tableName, const vector<string>& columns,
     tables[tableName] = Table(tableName, columns, columnTypes);
     
     // 创建CSV文件
-    ofstream file(tableName + ".csv");
+    ofstream file(DBpath+tableName + ".csv");
     if (!file.is_open()) 
     {
         cerr << "Error: Could not create file: " << tableName << ".csv" << endl;
@@ -68,7 +163,7 @@ void miniDB::InsertIntoTable(const string& tableName, const vector<string>& row)
     if (tables.find(tableName) != tables.end()) 
     {
         tables[tableName].addRow(row);
-        ofstream file(tableName + ".csv", ios::app);
+        ofstream file(DBpath+ tableName + ".csv", ios::app);
         if (!file.is_open()) 
         {
             cerr << "Error: Could not open file for writing: " << tableName << ".csv" << endl;
@@ -106,7 +201,6 @@ void miniDB::InsertIntoTable(const string& tableName, const vector<string>& row)
 // 从表中选择特定列的数据
 void miniDB::SelectColumnsFromTable(const string& tableName, const vector<string>& columns, const string& outputFile) 
 {
-    static bool FirstWrite = true;
     if (tables.find(tableName) != tables.end()) 
     {
         const Table& table = tables[tableName];
@@ -188,7 +282,6 @@ void miniDB::SelectColumnsFromTable(const string& tableName, const vector<string
 // 从表中选择所有列的数据
 void miniDB::SelectAllColumnsFromTable(const string& tableName, const string& outputFile) 
 {
-    static bool FirstWrite = true;
     if (tables.find(tableName) != tables.end()) 
     {
         const Table& table = tables[tableName];
@@ -256,7 +349,6 @@ void miniDB::SelectAllColumnsFromTable(const string& tableName, const string& ou
 // 从表中选择带有条件的数据
 void miniDB::SelectFromTableWithConditions(const std::string& tableName, const std::vector<std::string>& columns, const std::string& conditions, const std::string& outputFile)
 {
-    static bool FirstWrite = true;
     if (tables.find(tableName) != tables.end()) 
     {
         const Table& table = tables[tableName];
@@ -387,7 +479,6 @@ void miniDB::SelectFromTableWithConditions(const std::string& tableName, const s
 
 
 
-
 string removeSuffix(const string& str, const string& suffix) 
 {
     if (str.size() >= suffix.size() && str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0) 
@@ -454,13 +545,11 @@ void parseCommand(const string& command, miniDB& db, const string& outputFile)
                 istringstream valuesStream(valuesStr);
                 vector<string> values;
                 string value;
-                while (valuesStream >> value) 
+                while (getline(valuesStream, value, ',')) 
                 {
+                    value.erase(0, value.find_first_not_of(" \t\n\r"));
+                    value.erase(value.find_last_not_of(" \t\n\r") + 1);
                     values.push_back(value);
-                    if (valuesStream.peek() == ',') 
-                    {
-                        valuesStream.ignore();
-                    }
                 }
                 db.InsertIntoTable(tableName, values);
             } 
@@ -511,6 +600,10 @@ void parseCommand(const string& command, miniDB& db, const string& outputFile)
             {
                 cout << "Invalid SELECT command" << endl;
             }
+        }
+        else if (tokens[0] == "DROP" && tokens[1] == "TABLE") 
+        {
+            db.DropTable(tokens[2]);
         }
         else 
         {

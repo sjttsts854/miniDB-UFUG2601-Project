@@ -1,7 +1,10 @@
 #include "miniDB.h"
 #include <iostream>
 #include <fstream>
-using namespace std;   
+#include <sstream>
+
+using namespace std;
+
 int main(int argc, char* argv[]) 
 {
     if (argc != 3) 
@@ -23,9 +26,25 @@ int main(int argc, char* argv[])
     }
 
     string command;
-    while (getline(input, command)) 
+    string line;
+
+    while (getline(input, line)) 
     {
-        parseCommand(command, db, outputFile);
+        // 去除行首和行尾的空白字符
+        line.erase(0, line.find_first_not_of(" \t\n\r"));
+        line.erase(line.find_last_not_of(" \t\n\r") + 1);
+
+        if (line.empty()) 
+        {
+            continue;
+        }
+
+        command += line + " ";
+        if (line.find(';') != string::npos) 
+        {
+            parseCommand(command, db, outputFile);
+            command.clear();
+        }
     }
 
     input.close();
