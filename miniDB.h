@@ -39,9 +39,6 @@ public:
     // 从表中选择特定列的数据
     void SelectColumnsFromTable(const string& tableName, const vector<string>& columns, const string& outputFile);
 
-    // 从表中选择所有列的数据
-    void SelectAllColumnsFromTable(const string& tableName, const string& outputFile);
-
     // 从表中选择带有条件的数据
     void SelectFromTableWithConditions(const string& tableName, const vector<string>& columns, const string& conditions, const string& outputFile);
 

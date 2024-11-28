@@ -7,7 +7,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
-
+#include <regex>
 using namespace std;
 
 bool FirstWrite = true;
@@ -173,7 +173,7 @@ void miniDB::InsertIntoTable(const string& tableName, const vector<string>& row)
         {
             if (tables[tableName].columnTypes[i] == "TEXT") 
             {
-                file << "'" << row[i] << "'";
+                file  << row[i] ;
             }
             else if(tables[tableName].columnTypes[i] == "FLOAT")
             {
@@ -205,26 +205,36 @@ void miniDB::SelectColumnsFromTable(const string& tableName, const vector<string
     {
         const Table& table = tables[tableName];
         vector<int> columnIndices;
-        for (const auto& col : columns) 
+        if (columns.empty()) 
         {
-            auto it = find(table.columns.begin(), table.columns.end(), col);
-            if (it != table.columns.end()) 
+            // 如果没有指定列，则选择所有列
+            for (size_t i = 0; i < table.columns.size(); ++i) 
             {
-                columnIndices.push_back(distance(table.columns.begin(), it));
-            } 
-            else 
+                columnIndices.push_back(i);
+            }
+        } 
+        else 
+        {
+            for (const auto& col : columns) 
             {
-                cout << "Column " << col << " does not exist in table " << tableName << endl;
-                return;
+                auto it = find(table.columns.begin(), table.columns.end(), col);
+                if (it != table.columns.end()) 
+                {
+                    columnIndices.push_back(distance(table.columns.begin(), it));
+                } 
+                else 
+                {
+                    cout << "Column " << col << " does not exist in table " << tableName << endl;
+                    return;
+                }
             }
         }
 
-        // 打开输出文件
+        // 打开输出文件，使用追加模式
         ofstream file(outputFile, ios::out | ios::app);
-
         if (!file.is_open()) 
         {
-            cerr << "Error: Could not open file: " << outputFile << endl;
+            cout << "Failed to open file: " << outputFile << endl;
             return;
         }
 
@@ -233,12 +243,11 @@ void miniDB::SelectColumnsFromTable(const string& tableName, const vector<string
             file << "---" << endl;
         }
         FirstWrite = false;
-
         // 写入列名
-        for (size_t i = 0; i < columns.size(); ++i) 
+        for (size_t i = 0; i < columnIndices.size(); ++i) 
         {
-            file << columns[i];
-            if (i < columns.size() - 1) 
+            file << table.columns[columnIndices[i]];
+            if (i < columnIndices.size() - 1) 
             {
                 file << ",";
             }
@@ -253,7 +262,7 @@ void miniDB::SelectColumnsFromTable(const string& tableName, const vector<string
                 int colIndex = columnIndices[i];
                 if (table.columnTypes[colIndex] == "TEXT") 
                 {
-                    file << "'" << row[colIndex] << "'";
+                    file<< row[colIndex] ;
                 } 
                 else if (table.columnTypes[colIndex] == "FLOAT") 
                 {
@@ -278,75 +287,8 @@ void miniDB::SelectColumnsFromTable(const string& tableName, const vector<string
         cout << "Table " << tableName << " does not exist" << endl;
     }
 }
+void parseWhere(const string& conditions, vector<pair<string, string>>& conditionPairs, string& logicalOperation, const vector<string>& columns) ;
 
-// 从表中选择所有列的数据
-void miniDB::SelectAllColumnsFromTable(const string& tableName, const string& outputFile) 
-{
-    if (tables.find(tableName) != tables.end()) 
-    {
-        const Table& table = tables[tableName];
-
-        // 打开输出文件
-        ofstream file(outputFile, ios::out | ios::app);
-
-        if (!file.is_open()) 
-        {
-            cerr << "Error: Could not open file: " << outputFile << endl;
-            return;
-        }
-
-        if (!FirstWrite) 
-        {
-            file << "---" << endl;
-        }
-        FirstWrite = false;
-        
-        // 写入列名
-        for (size_t i = 0; i < table.columns.size(); ++i) 
-        {
-            file << table.columns[i];
-            if (i < table.columns.size() - 1) 
-            {
-                file << ",";
-            }
-        }
-        file << endl;
-
-        // 写入数据行
-        for (const auto& row : table.data) 
-        {
-            for (size_t i = 0; i < row.size(); ++i) 
-            {
-                if (table.columnTypes[i] == "TEXT") 
-                {
-                    file << "'" << row[i] << "'";
-                } 
-                else if (table.columnTypes[i] == "FLOAT") 
-                {
-                    file << std::fixed << std::setprecision(2) << stof(row[i]);
-                } 
-                else 
-                {
-                    file << row[i];
-                }
-                if (i < row.size() - 1) 
-                {
-                    file << ",";
-                }
-            }
-            file << endl;
-        }
-
-        file.close();
-        
-    } 
-    else 
-    {
-        cout << "Table " << tableName << " does not exist" << endl;
-    }
-}
-
-// 从表中选择带有条件的数据
 void miniDB::SelectFromTableWithConditions(const std::string& tableName, const std::vector<std::string>& columns, const std::string& conditions, const std::string& outputFile)
 {
     if (tables.find(tableName) != tables.end()) 
@@ -369,26 +311,9 @@ void miniDB::SelectFromTableWithConditions(const std::string& tableName, const s
 
         // 解析条件
         vector<pair<string, string>> conditionPairs;
-        istringstream condStream(conditions);
-        string cond;
-        while (getline(condStream, cond, ' ')) 
-        {
-            if (cond == "AND" || cond == "OR") 
-            {
-                conditionPairs.push_back({cond, ""});
-            } 
-            else 
-            {
-                size_t opPos = cond.find_first_of("><=");
-                if (opPos != string::npos) 
-                {
-                    string colName = cond.substr(0, opPos);
-                    string op = cond.substr(opPos, 1);
-                    string value = cond.substr(opPos + 1);
-                    conditionPairs.push_back({colName, op + value});
-                }
-            }
-        }
+        string logicalOperation;
+
+        parseWhere(conditions, conditionPairs, logicalOperation, columns);
 
         // 打开输出文件
         ofstream file(outputFile, ios::out | ios::app);
@@ -420,44 +345,71 @@ void miniDB::SelectFromTableWithConditions(const std::string& tableName, const s
         for (const auto& row : table.data) 
         {
             bool match = true;
-            for (const auto& condPair : conditionPairs) 
+            for (size_t i = 0; i < conditionPairs.size(); ++i) 
             {
+                const auto& condPair = conditionPairs[i];
                 auto it = find(table.columns.begin(), table.columns.end(), condPair.first);
                 if (it != table.columns.end()) 
                 {
                     int index = distance(table.columns.begin(), it);
                     string value = row[index];
-                    string condValue = condPair.second.substr(1);
+                    string condValue;
+                    if(condPair.second[0]!='!') condValue = condPair.second.substr(1);
+                    else condValue = condPair.second.substr(2);
                     char op = condPair.second[0];
-                    if (op == '>' && !(stof(value) > stof(condValue))) 
+                    bool conditionMatch = false;
+
+                    if (op == '>' && stof(value) > stof(condValue)) 
                     {
-                        match = false;
+                        conditionMatch = true;
                     } 
-                    else if (op == '<' && !(stof(value) < stof(condValue))) 
+                    else if (op == '<' && stof(value) < stof(condValue)) 
                     {
-                        match = false;
+                        conditionMatch = true;
                     } 
-                    else if (op == '=' && !(value == condValue)) 
+                    else if (op == '=' && value == condValue) 
                     {
-                        match = false;
+                        conditionMatch = true;
+                    }
+                    else if (op == '!' && value != condValue) 
+                    {
+                        conditionMatch = true;
+                    }
+
+                    if (i == 0) 
+                    {
+                        match = conditionMatch;
+                    } 
+                    else 
+                    {
+                        if (logicalOperation == "AND") 
+                        {
+                            match = match && conditionMatch;
+                        } 
+                        else if (logicalOperation == "OR") 
+                        {
+                            match = match || conditionMatch;
+                        }
                     }
                 }
             }
+
             if (match) 
             {
                 for (size_t i = 0; i < columnIndices.size(); ++i) 
                 {
-                    if (table.columnTypes[columnIndices[i]] == "TEXT") 
+                    int colIndex = columnIndices[i];
+                    if (table.columnTypes[colIndex] == "TEXT") 
                     {
-                        file << "'" << row[columnIndices[i]] << "'";
+                        file<< row[colIndex] ;
                     } 
-                    else if (table.columnTypes[columnIndices[i]] == "FLOAT") 
+                    else if (table.columnTypes[colIndex] == "FLOAT") 
                     {
-                        file << std::fixed << std::setprecision(2) << stof(row[columnIndices[i]]);
+                        file << std::fixed << std::setprecision(2) << stof(row[colIndex]);
                     } 
                     else 
                     {
-                        file << row[columnIndices[i]];
+                        file << row[colIndex];
                     }
                     if (i < columnIndices.size() - 1) 
                     {
@@ -469,7 +421,6 @@ void miniDB::SelectFromTableWithConditions(const std::string& tableName, const s
         }
 
         file.close();
-        
     } 
     else 
     {
@@ -477,7 +428,7 @@ void miniDB::SelectFromTableWithConditions(const std::string& tableName, const s
     }
 }
 
-
+// 更新表中的数据
 
 string removeSuffix(const string& str, const string& suffix) 
 {
@@ -565,14 +516,22 @@ void parseCommand(const string& command, miniDB& db, const string& outputFile)
             if (fromPos != tokens.size()) 
             {
                 string tableName = tokens[fromPos + 1];
-                if (wherePos != tokens.size()) 
+                vector<string> columns;
+                if (tokens[1] == "*") 
                 {
-                    vector<string> columns(tokens.begin() + 1, tokens.begin() + fromPos);
+                    columns = {}; // 空的 columns 表示选择所有列
+                } 
+                else 
+                {
+                    columns = vector<string>(tokens.begin() + 1, tokens.begin() + fromPos);
                     // 去掉列名中的逗号
                     for (auto& col : columns) 
                     {
                         col.erase(remove(col.begin(), col.end(), ','), col.end());
                     }
+                }
+                if (wherePos != tokens.size()) 
+                {
                     string conditions;
                     for (size_t i = wherePos + 1; i < tokens.size(); ++i) 
                     {
@@ -581,18 +540,8 @@ void parseCommand(const string& command, miniDB& db, const string& outputFile)
                     }
                     db.SelectFromTableWithConditions(tableName, columns, conditions, outputFile);
                 } 
-                else if (tokens[1] == "*") 
-                {
-                    db.SelectAllColumnsFromTable(tableName, outputFile);
-                } 
                 else 
                 {
-                    vector<string> columns(tokens.begin() + 1, tokens.begin() + fromPos);
-                    // 去掉列名中的逗号
-                    for (auto& col : columns) 
-                    {
-                        col.erase(remove(col.begin(), col.end(), ','), col.end());
-                    }
                     db.SelectColumnsFromTable(tableName, columns, outputFile);
                 }
             }
@@ -614,4 +563,88 @@ void parseCommand(const string& command, miniDB& db, const string& outputFile)
     {
         cout << "Invalid command" << endl;
     }
+}
+
+void parseWhere(const string& conditions, vector<pair<string, string>>& conditionPairs, string& logicalOperation, const vector<string>& columns) 
+{
+    vector<string> tokens;
+    string token;
+    istringstream iss(conditions);
+    char ch;
+    bool inQuotes = false;
+    string currentToken;
+
+    while (iss >> std::noskipws >> ch)
+    {
+        if (ch == '\'')
+        {
+            inQuotes = !inQuotes;
+            currentToken += ch;
+        }
+        else if (inQuotes)
+        {
+            currentToken += ch;
+        }
+        else if (ch == ' ' && !inQuotes)
+        {
+            if (!currentToken.empty())
+            {
+                tokens.push_back(currentToken);
+                currentToken.clear();
+            }
+        }
+        else
+        {
+            currentToken += ch;
+        }
+    }
+
+        // 处理最后一个 token
+    if (!currentToken.empty())
+    {
+        tokens.push_back(currentToken);
+    }
+
+    auto it = find(tokens.begin(), tokens.end(), "AND");
+    if (it != tokens.end()) 
+    {
+        logicalOperation = "AND";
+        tokens.erase(it);
+    } 
+    else 
+    {
+        it = find(tokens.begin(), tokens.end(), "OR");
+        if (it != tokens.end()) 
+        {
+            logicalOperation = "OR";
+            tokens.erase(it);
+        }
+    }
+
+    while (!tokens.empty())
+    {
+        string op = tokens[1];
+        if(find(columns.begin(), columns.end(), tokens[0]) != columns.end())
+        {
+            string col = tokens[0];
+            string value = tokens[2];
+            conditionPairs.push_back({col, op + value});
+        }
+        else if(find(columns.begin(), columns.end(), tokens[2]) != columns.end())
+        {
+            string col = tokens[2];
+            string value = tokens[0];
+            if(op == ">")
+            {
+                op = "<";
+            }
+            else if(op == "<")
+            {
+                op = ">";
+            }
+            conditionPairs.push_back({col, op + value});
+        }
+        tokens.erase(tokens.begin(), tokens.begin() + 3);
+    }
+
 }
