@@ -45,6 +45,9 @@ public:
     // 更新表中的数据
     //void UpdateTable(const string& tableName, const vector<string>& setClauses, const string& conditions);
 
+    // INNER JOIN 两个表
+    void InnerJoin(const vector<string>& tableNames, const vector<string>& columns, const string& conditions, const string& outputFile);
+    
 
     // 从文件加载表
     void LoadAllTables(const string& path);

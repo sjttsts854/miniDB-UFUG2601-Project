@@ -14,6 +14,9 @@ bool FirstWrite = true;
 
 string DBpath;
 
+void parseOn(const string& conditions, string& col1, string& col2);
+
+void parseWhere(const string& conditions, vector<pair<string, string>>& conditionPairs, string& logicalOperation, const vector<string>& columns) ;
 // 从文件加载表
 void miniDB::LoadAllTables(const string& path)
 {
@@ -263,14 +266,17 @@ void miniDB::SelectColumnsFromTable(const string& tableName, const vector<string
                 if (table.columnTypes[colIndex] == "TEXT") 
                 {
                     file<< row[colIndex] ;
+                    cout << row[colIndex] << endl;
                 } 
                 else if (table.columnTypes[colIndex] == "FLOAT") 
                 {
                     file << std::fixed << std::setprecision(2) << stof(row[colIndex]);
+                    cout<<std::fixed << std::setprecision(2) << stof(row[colIndex])<<endl;
                 } 
                 else 
                 {
                     file << row[colIndex];
+                    cout << row[colIndex] << endl;
                 }
                 if (i < columnIndices.size() - 1) 
                 {
@@ -287,7 +293,7 @@ void miniDB::SelectColumnsFromTable(const string& tableName, const vector<string
         cout << "Table " << tableName << " does not exist" << endl;
     }
 }
-void parseWhere(const string& conditions, vector<pair<string, string>>& conditionPairs, string& logicalOperation, const vector<string>& columns) ;
+
 
 void miniDB::SelectFromTableWithConditions(const std::string& tableName, const std::vector<std::string>& columns, const std::string& conditions, const std::string& outputFile)
 {
@@ -430,6 +436,99 @@ void miniDB::SelectFromTableWithConditions(const std::string& tableName, const s
 
 // 更新表中的数据
 
+void miniDB::InnerJoin(const vector<string>& tableNames, const vector<string>& columns, const string& conditions, const string& outputFile)
+{
+    if (tables.find(tableNames[0]) != tables.end() && tables.find(tableNames[1]) != tables.end()) 
+    {
+        const Table& tableA = tables[tableNames[0]];
+        const Table& tableB = tables[tableNames[1]];
+
+        vector<int> columnIndicesA;
+        vector<int> columnIndicesB;
+        auto itA = find(tableA.columns.begin(), tableA.columns.end(), columns[0]);
+        auto itB = find(tableB.columns.begin(), tableB.columns.end(), columns[1]);
+        if (itA != tableA.columns.end() && itB != tableB.columns.end()) 
+        {
+            columnIndicesA.push_back(distance(tableA.columns.begin(), itA));
+            columnIndicesB.push_back(distance(tableB.columns.begin(), itB));
+        } 
+        else 
+        {
+            cout << "Column " << columns[0] << " does not exist in table " << tableNames[0] << endl;
+            cout << "Column " << columns[1] << " does not exist in table " << tableNames[1] << endl;
+            return;
+        }
+
+        // 解析条件
+        string colA,colB;
+        parseOn(conditions, colA, colB);
+        int indexA = distance(tableA.columns.begin(), find(tableA.columns.begin(), tableA.columns.end(), colA));
+        int indexB = distance(tableB.columns.begin(), find(tableB.columns.begin(), tableB.columns.end(), colB));
+
+        // 打开输出文件
+        ofstream file(outputFile, ios::out | ios::app);
+        if (!file.is_open()) 
+        {
+            cerr << "Error: Could not open file: " << outputFile << endl;
+            return;
+        }
+        
+        if (!FirstWrite) 
+        {
+            file << "---" << endl;
+        }
+        FirstWrite = false;
+
+        for (size_t i = 0; i < columns.size(); ++i) 
+        {
+            file << columns[i];
+            if (i < columns.size() - 1) 
+            {
+                file << ",";
+            }
+        }
+        file << endl;
+
+        for (const auto& rowA : tableA.data) 
+        {
+            for (const auto& rowB : tableB.data) 
+            {
+                if (rowA[indexA] == rowB[indexB]) 
+                {
+                    if (tableA.columnTypes[columnIndicesA[0]] == "TEXT") 
+                    {
+                        file << rowA[columnIndicesA[0]];
+                    } 
+                    else if (tableA.columnTypes[columnIndicesA[0]] == "FLOAT") 
+                    {
+                        file << std::fixed << std::setprecision(2) << stof(rowA[columnIndicesA[0]]);
+                    } 
+                    else 
+                    {
+                        file << rowA[columnIndicesA[0]];
+                    }
+                    file << ",";
+                    if (tableB.columnTypes[columnIndicesB[0]] == "TEXT") 
+                    {
+                        file << rowB[columnIndicesB[0]];
+                    } 
+                    else if (tableB.columnTypes[columnIndicesB[0]] == "FLOAT") 
+                    {
+                        file << std::fixed << std::setprecision(2) << stof(rowB[columnIndicesB[0]]);
+                    } 
+                    else 
+                    {
+                        file << rowB[columnIndicesB[0]];
+                    }
+                    file << endl;
+                }
+            }
+        }
+
+        file.close();
+    }
+}
+
 string removeSuffix(const string& str, const string& suffix) 
 {
     if (str.size() >= suffix.size() && str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0) 
@@ -492,14 +591,15 @@ void parseCommand(const string& command, miniDB& db, const string& outputFile)
             {
                 string valuesStr = command.substr(pos + 6); // 跳过 "VALUES"
                 valuesStr.erase(remove(valuesStr.begin(), valuesStr.end(), '('), valuesStr.end());
-                valuesStr.erase(remove(valuesStr.begin(), valuesStr.end(), ')'), valuesStr.end());
+                valuesStr.erase(remove(valuesStr.begin(), valuesStr.end(), ')'), valuesStr.end());//this will work ?! why the underone don't work????
+                valuesStr = removeSuffix(valuesStr, ";");// don't work  so strange???
                 istringstream valuesStream(valuesStr);
                 vector<string> values;
                 string value;
                 while (getline(valuesStream, value, ',')) 
                 {
-                    value.erase(0, value.find_first_not_of(" \t\n\r"));
-                    value.erase(value.find_last_not_of(" \t\n\r") + 1);
+                    value.erase(0, value.find_first_not_of("; \t\n\r"));//this works ?!
+                    value.erase(value.find_last_not_of("; \t\n\r") + 1);
                     values.push_back(value);
                 }
                 db.InsertIntoTable(tableName, values);
@@ -513,7 +613,34 @@ void parseCommand(const string& command, miniDB& db, const string& outputFile)
         {
             size_t fromPos = find(tokens.begin(), tokens.end(), "FROM") - tokens.begin();
             size_t wherePos = find(tokens.begin(), tokens.end(), "WHERE") - tokens.begin();
-            if (fromPos != tokens.size()) 
+            size_t joinPos = find(tokens.begin(), tokens.end(), "INNER") - tokens.begin();
+            if (joinPos != tokens.size())
+            {
+                string tableA = tokens[joinPos - 1];
+                string tableB = tokens[joinPos + 2];
+                vector<string> tableNames;
+                tableNames.push_back(tableA);
+                tableNames.push_back(tableB);
+                vector<string> columns;
+                for (size_t i = 1; i < fromPos; ++i) 
+                {
+                    tokens[i].erase(remove(tokens[i].begin(), tokens[i].end(), ','), tokens[i].end());
+                    size_t dotPos = tokens[i].find(".");
+                    if (dotPos != string::npos) 
+                    {
+                        columns.push_back(tokens[i].substr(dotPos + 1));
+                    } 
+                }
+                string conditions;
+                size_t onPos = find(tokens.begin(), tokens.end(), "ON") - tokens.begin();
+                for (size_t i = onPos + 1; i < tokens.size(); ++i) 
+                {
+                    conditions += tokens[i];
+                    conditions += " ";
+                }
+                db.InnerJoin(tableNames, columns, conditions, outputFile);
+            }
+            else if (fromPos != tokens.size()) 
             {
                 string tableName = tokens[fromPos + 1];
                 vector<string> columns;
@@ -647,4 +774,47 @@ void parseWhere(const string& conditions, vector<pair<string, string>>& conditio
         tokens.erase(tokens.begin(), tokens.begin() + 3);
     }
 
+}
+
+void parseOn(const string& conditions, string& col1, string& col2)
+{
+    vector<string> tokens;
+    string token;
+    istringstream iss(conditions);
+    char ch;
+    bool inQuotes = false;
+    string currentToken;
+    while (iss >> std::noskipws >> ch) 
+    {
+        if (ch == '\'') 
+        {
+            inQuotes = !inQuotes;
+            currentToken += ch;
+        } 
+        else if (inQuotes) 
+        {
+            currentToken += ch;
+        } 
+        else if (ch == ' ' && !inQuotes) 
+        {
+            if (!currentToken.empty()) 
+            {
+                tokens.push_back(currentToken);
+                currentToken.clear();
+            }
+        } 
+        else 
+        {
+            currentToken += ch;
+        }
+    }
+    size_t dotPosA = tokens[0].find(".");
+    size_t dotPosB = tokens[2].find(".");
+    if (dotPosA != string::npos && dotPosB != string::npos) 
+    {
+        string colA = tokens[0].substr(dotPosA + 1);
+        string colB = tokens[2].substr(dotPosB + 1);
+        col1 = colA;
+        col2 = colB;
+    }
 }
