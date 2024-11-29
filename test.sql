@@ -23,5 +23,9 @@ INSERT INTO student VALUES (1005, 'litterzy', 2.0, 'Cakewalk Producer');
 
 SELECT * FROM student;
 
-SELECT ID, Name FROM student;
+DELETE FROM student WHERE Name = 'litterzy';
+
+DELETE FROM student WHERE GPA < 3.3;
+
+SELECT * FROM student;
 

@@ -266,17 +266,14 @@ void miniDB::SelectColumnsFromTable(const string& tableName, const vector<string
                 if (table.columnTypes[colIndex] == "TEXT") 
                 {
                     file<< row[colIndex] ;
-                    cout << row[colIndex] << endl;
                 } 
                 else if (table.columnTypes[colIndex] == "FLOAT") 
                 {
                     file << std::fixed << std::setprecision(2) << stof(row[colIndex]);
-                    cout<<std::fixed << std::setprecision(2) << stof(row[colIndex])<<endl;
                 } 
                 else 
                 {
                     file << row[colIndex];
-                    cout << row[colIndex] << endl;
                 }
                 if (i < columnIndices.size() - 1) 
                 {
@@ -529,6 +526,78 @@ void miniDB::InnerJoin(const vector<string>& tableNames, const vector<string>& c
     }
 }
 
+void miniDB::Delete(const string& tableName, const string& conditions) 
+{
+    if (tables.find(tableName) != tables.end()) 
+    {
+        Table& table = tables[tableName];
+        vector<pair<string, string>> conditionPairs;
+        string logicalOperation;
+
+        if (!conditions.empty()) 
+        {
+            parseWhere(conditions, conditionPairs, logicalOperation, table.columns);
+        }
+
+        auto it = table.data.begin();
+        while (it != table.data.end()) 
+        {
+            bool match = true;
+            if (!conditions.empty()) 
+            {
+                for (const auto& condPair : conditionPairs) 
+                {
+                    auto colIt = find(table.columns.begin(), table.columns.end(), condPair.first);
+                    if (colIt != table.columns.end()) 
+                    {
+                        int index = distance(table.columns.begin(), colIt);
+                        string value = (*it)[index];
+                        string condValue = condPair.second.substr(1);
+                        char op = condPair.second[0];
+
+                        if (op == '>' && stof(value) <= stof(condValue)) 
+                        {
+                            match = false;
+                            break;
+                        } 
+                        else if (op == '<' && stof(value) >= stof(condValue)) 
+                        {
+                            match = false;
+                            break;
+                        } 
+                        else if (op == '=' && value != condValue) 
+                        {
+                            match = false;
+                            break;
+                        } 
+                        else if (op == '!' && value == condValue) 
+                        {
+                            match = false;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (match) 
+            {
+                it = table.data.erase(it);
+            } 
+            else 
+            {
+                ++it;
+            }
+        }
+
+        // 更新CSV文件
+        table.saveToCSV(DBpath + tableName + ".csv");
+    } 
+    else 
+    {
+        cout << "Table " << tableName << " does not exist" << endl;
+    }
+}
+
 string removeSuffix(const string& str, const string& suffix) 
 {
     if (str.size() >= suffix.size() && str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0) 
@@ -680,6 +749,21 @@ void parseCommand(const string& command, miniDB& db, const string& outputFile)
         else if (tokens[0] == "DROP" && tokens[1] == "TABLE") 
         {
             db.DropTable(tokens[2]);
+        }
+        else if (tokens[0] == "DELETE" && tokens[1] == "FROM") 
+        {
+            string tableName = tokens[2];
+            string conditions;
+            size_t wherePos = find(tokens.begin(), tokens.end(), "WHERE") - tokens.begin();
+            if(wherePos != tokens.size())
+            {
+                for (size_t i = wherePos + 1; i < tokens.size(); ++i) 
+                {
+                    conditions += tokens[i];
+                    conditions += " ";
+                }
+                db.Delete(tableName, conditions);
+            }
         }
         else 
         {
