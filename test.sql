@@ -1,6 +1,6 @@
-CREATE DATABASE test;
+CREATE DATABASE db_university;
 
-USE DATABASE test;
+USE DATABASE db_university;
 
 CREATE TABLE student (
 ID INTEGER,
@@ -11,21 +11,9 @@ Major TEXT
 
 INSERT INTO student VALUES (1000, 'Jay Chou', 3.0, 'Microelectronics');
 
-INSERT INTO student VALUES (1001, 'Taylor Swift', 3.2, 'Data Science');
+UPDATE student
+SET GPA = 1.5, Major = 'Music'
+WHERE ID = 1000;
 
-INSERT INTO student VALUES (1002, 'Bob Dylan', 3.5, 'Financial Technology');
-
-INSERT INTO student VALUES (1003, 'David Green', 3.7, 'Civil Engineering');
-
-INSERT INTO student VALUES (1004, 'Hatsune Miku', 3.3, 'Vocaloid');
-
-INSERT INTO student VALUES (1005, 'litterzy', 2.0, 'Cakewalk Producer');
 
 SELECT * FROM student;
-
-DELETE FROM student WHERE Name = 'litterzy';
-
-DELETE FROM student WHERE GPA < 3.3;
-
-SELECT * FROM student;
-

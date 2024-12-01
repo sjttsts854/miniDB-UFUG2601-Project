@@ -43,7 +43,7 @@ void Table::saveToCSV(const string& outputFile) const
         {
             if (columnTypes[i] == "TEXT") 
             {
-                file << "\"" << row[i] << "\"";
+                file << row[i] ;
             } 
             else if (columnTypes[i] == "FLOAT") 
             {

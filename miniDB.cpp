@@ -7,12 +7,119 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
-#include <regex>
+#include <unordered_map>
+#include <stack>
 using namespace std;
 
 bool FirstWrite = true;
 
 string DBpath;
+
+bool isOperator(char c) 
+{
+    return c == '+' || c == '-' || c == '*' || c == '/';
+}
+
+int precedence(char op) 
+{
+    if (op == '+' || op == '-') 
+    {
+        return 1;
+    }
+    if (op == '*' || op == '/') 
+    {
+        return 2;
+    }
+    return 0;
+}
+
+// 将中缀表达式转换为后缀表达式
+vector<string> infixToPostfix(const string& expr) 
+{
+    vector<string> output;
+    stack<char> opStack;
+    istringstream iss(expr);
+    string token;
+    while (iss >> token) 
+    {
+        if (isdigit(token[0]) || (token[0] == '.' && token.size() > 1)) 
+        {
+            // 数字
+            output.push_back(token);
+        } 
+        else if (isalpha(token[0])) 
+        {
+            // 变量
+            output.push_back(token);
+        } 
+        else if (token == "(") 
+        {
+            opStack.push('(');
+        } 
+        else if (token == ")") 
+        {
+            while (!opStack.empty() && opStack.top() != '(') 
+            {
+                output.push_back(string(1, opStack.top()));
+                opStack.pop();
+            }
+            opStack.pop(); // 弹出 '('
+        } 
+        else if (isOperator(token[0])) 
+        {
+            while (!opStack.empty() && precedence(opStack.top()) >= precedence(token[0])) 
+            {
+                output.push_back(string(1, opStack.top()));
+                opStack.pop();
+            }
+            opStack.push(token[0]);
+        }
+    }
+    while (!opStack.empty()) 
+    {
+        output.push_back(string(1, opStack.top()));
+        opStack.pop();
+    }
+    return output;
+}
+
+double evaluatePostfix(const vector<string>& postfix, const unordered_map<string, double>& variables) 
+{
+    stack<double> valStack;
+    for (const string& token : postfix) 
+    {
+        if (isdigit(token[0]) || (token[0] == '.' && token.size() > 1)) 
+        {
+            valStack.push(stod(token));
+        } 
+        else if (isalpha(token[0])) 
+        {
+            if (variables.count(token)) 
+            {
+                valStack.push(variables.at(token));
+            } 
+            else 
+            {
+                throw runtime_error("Undefined variable: " + token);
+            }
+        } 
+        else if (isOperator(token[0])) 
+        {
+            double b = valStack.top(); valStack.pop();
+            double a = valStack.top(); valStack.pop();
+            switch (token[0]) 
+            {
+                case '+': valStack.push(a + b); break;
+                case '-': valStack.push(a - b); break;
+                case '*': valStack.push(a * b); break;
+                case '/': valStack.push(a / b); break;
+            }
+        }
+    }
+    return valStack.top();
+}
+
+void parseSet(const string& setClauses, vector<pair<string, string>>& setPairs, const vector<string>& columns, const vector<string>& columnTypes) ;
 
 void parseOn(const string& conditions, string& col1, string& col2);
 
@@ -598,6 +705,108 @@ void miniDB::Delete(const string& tableName, const string& conditions)
     }
 }
 
+void miniDB::UpdateTable(const string& tableName, const string setClauses, const string& conditions)
+{
+    if (tables.find(tableName)!=tables.end())
+    {
+        Table& table = tables[tableName];
+        vector <pair<string, string>> setPairs;
+        vector <pair<string, string>> conditionPairs;
+        string logicalOperation;
+        parseSet(setClauses, setPairs, table.columns, table.columnTypes);
+
+        if (!conditions.empty()) 
+        {
+            parseWhere(conditions, conditionPairs, logicalOperation, table.columns);
+        }
+
+        for (auto& row : table.data)
+        {
+            unordered_map<string, double> variables;
+            for (size_t i=0; i<table.columns.size(); ++i)
+            {
+                if(table.columnTypes[i]!="TEXT")
+                {
+                    variables[table.columns[i]] = stod(row[i]);
+                }
+            }
+
+            bool match = true;
+            if(!conditionPairs.empty())
+            {
+                for (size_t i = 0; i < conditionPairs.size(); ++i) 
+                {
+                    const auto& condPair = conditionPairs[i];
+                    auto it = find(table.columns.begin(), table.columns.end(), condPair.first);
+                    if (it != table.columns.end()) 
+                    {
+                        int index = distance(table.columns.begin(), it);
+                        string value = row[index];
+                        string condValue;
+                        if(condPair.second[0]!='!') condValue = condPair.second.substr(1);
+                        else condValue = condPair.second.substr(2);
+                        char op = condPair.second[0];
+                        bool conditionMatch = false;
+
+                        if (op == '>' && stof(value) > stof(condValue)) 
+                        {
+                            conditionMatch = true;
+                        } 
+                        else if (op == '<' && stof(value) < stof(condValue)) 
+                        {
+                            conditionMatch = true;
+                        } 
+                        else if (op == '=' && value == condValue) 
+                        {
+                            conditionMatch = true;
+                        }
+                        else if (op == '!' && value != condValue) 
+                        {
+                            conditionMatch = true;
+                        }
+
+                        if (i == 0) 
+                        {
+                            match = conditionMatch;
+                        } 
+                        else 
+                        {
+                            if (logicalOperation == "AND") 
+                            {
+                                match = match && conditionMatch;
+                            } 
+                            else if (logicalOperation == "OR") 
+                            {
+                                match = match || conditionMatch;
+                            }
+                        }
+                    }
+                }
+            }
+            if(match)
+            {
+                for (const auto& setPair : setPairs)
+                {
+                    const string& col = setPair.first;
+                    const string& expr = setPair.second;
+                    size_t colIndex = distance(table.columns.begin(), find(table.columns.begin(), table.columns.end(), col));
+                    if(table.columnTypes[colIndex]=="TEXT")
+                    {
+                        row[colIndex]=expr;
+                    }
+                    else
+                    {
+                        vector<string> postfix=infixToPostfix(expr);
+                        double newValue = ::evaluatePostfix(postfix, variables);
+                        row[colIndex]=to_string(newValue);
+                        variables[col]=newValue;
+                    }
+                }
+            }
+        }
+        table.saveToCSV(DBpath + tableName + ".csv");
+    }
+}
 string removeSuffix(const string& str, const string& suffix) 
 {
     if (str.size() >= suffix.size() && str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0) 
@@ -765,6 +974,35 @@ void parseCommand(const string& command, miniDB& db, const string& outputFile)
                 db.Delete(tableName, conditions);
             }
         }
+        else if (tokens[0] == "UPDATE")
+        {
+            string tableName = tokens[1];
+            string setClauses;
+            string conditions;
+            size_t setPos = find(tokens.begin(), tokens.end(), "SET") - tokens.begin();
+            size_t wherePos = find(tokens.begin(), tokens.end(), "WHERE") - tokens.begin();
+            if(setPos != tokens.size())
+            {
+                for (size_t i = setPos + 1; i < wherePos; ++i) 
+                {
+                    setClauses += tokens[i];
+                    setClauses += " ";
+                }
+                if (wherePos != tokens.size()) 
+                {
+                    for (size_t i = wherePos + 1; i < tokens.size(); ++i) 
+                    {
+                        conditions += tokens[i];
+                        conditions += " ";
+                    }
+                    db.UpdateTable(tableName, setClauses, conditions);
+                }
+                else
+                {
+                    db.UpdateTable(tableName, setClauses, "");
+                }
+            }
+        }
         else 
         {
             cout << "Unknown command" << endl;
@@ -900,5 +1138,43 @@ void parseOn(const string& conditions, string& col1, string& col2)
         string colB = tokens[2].substr(dotPosB + 1);
         col1 = colA;
         col2 = colB;
+    }
+}
+
+
+void parseSet(const string& setClauses, vector<pair<string, string>>& setPairs, const vector<string>& columns, const vector<string>& columnTypes) 
+{
+    vector<string> clauses;
+    string clause;
+    istringstream iss(setClauses);
+    while (getline(iss, clause, ',')) 
+    {
+        clauses.push_back(clause);
+    }
+    for (const auto& clause : clauses) 
+    {
+        size_t eqPos = clause.find("=");
+        string colName;
+        if (eqPos != string::npos) 
+        {
+            colName = clause.substr(0, eqPos);
+            colName.erase(remove(colName.begin(), colName.end(), ' '), colName.end()); // 去除空格
+        }
+        string rhs;
+        if (eqPos != string::npos) 
+        {
+            rhs = clause.substr(eqPos + 1);
+        }
+
+        // 获取列的数据类型
+        auto it = find(columns.begin(), columns.end(), colName);
+        if (it != columns.end())
+        {
+            setPairs.push_back({colName, rhs});
+        }
+        else
+        {
+            cerr << "Column " << colName << " does not exist." << endl;
+        }
     }
 }

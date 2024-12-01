@@ -43,7 +43,7 @@ public:
     void SelectFromTableWithConditions(const string& tableName, const vector<string>& columns, const string& conditions, const string& outputFile);
 
     // 更新表中的数据
-    //void UpdateTable(const string& tableName, const vector<string>& setClauses, const string& conditions);
+    void UpdateTable(const string& tableName, const string setClauses, const string& conditions);
 
     // INNER JOIN 两个表
     void InnerJoin(const vector<string>& tableNames, const vector<string>& columns, const string& conditions, const string& outputFile);
@@ -59,4 +59,4 @@ public:
 // 解析并执行命令
 void parseCommand(const string& command, miniDB& db, const string& outputFile);
 
-#endif // MINIDB_H
+#endif 
