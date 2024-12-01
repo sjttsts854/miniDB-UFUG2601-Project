@@ -7,3 +7,6 @@ The system is able to process commands in miniSQL and output the query results.
 
 ## 11.26 version
 ### 重构了一部分代码，使得代码更加可读，并且功能划分更加清晰 仍有一部分功能未实现
+
+## 12.1 Final Version 1.0
+### 所有功能均已实现
