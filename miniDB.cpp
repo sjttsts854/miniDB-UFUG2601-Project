@@ -9,6 +9,7 @@
 #include <dirent.h>
 #include <unordered_map>
 #include <stack>
+
 using namespace std;
 
 bool FirstWrite = true;
@@ -18,6 +19,51 @@ string DBpath;
 bool isOperator(char c) 
 {
     return c == '+' || c == '-' || c == '*' || c == '/';
+}
+
+vector<string> splitExpression(const string& expr) 
+{
+    vector <string> tokens;
+    string token;
+    for (size_t i=0; i<expr.size();++i)
+    {
+        char current = expr[i];
+        if (current == ' ')
+        {
+            continue;
+        }
+        if (isdigit(current) || current == '.') {
+            // 处理数字
+            token.clear();
+            while (i < expr.size() && (isdigit(expr[i]) || expr[i] == '.')) {
+                token += expr[i];
+                ++i;
+            }
+            tokens.push_back(token);
+            --i; // 恢复索引
+        }
+        else if (isalpha(current)) {
+            // 处理变量（列名）
+            token.clear();
+            while (i < expr.size() && (isalnum(expr[i]) || expr[i] == '_')) {
+                token += expr[i];
+                ++i;
+            }
+            tokens.push_back(token);
+            --i;
+        }
+        else if (isOperator(current) || current == '(' || current == ')') {
+            // 处理操作符和括号
+            token = current;
+            tokens.push_back(token);
+        }
+        else {
+            // 处理其他字符（可根据需要扩展）
+            token = current;
+            tokens.push_back(token);
+        }
+    }
+    return tokens;
 }
 
 int precedence(char op) 
@@ -38,36 +84,36 @@ vector<string> infixToPostfix(const string& expr)
 {
     vector<string> output;
     stack<char> opStack;
-    istringstream iss(expr);
-    string token;
-    while (iss >> token) 
+    vector<string> tokens = splitExpression(expr);
+    
+    for(const auto& token : tokens)
     {
-        if (isdigit(token[0]) || (token[0] == '.' && token.size() > 1)) 
+        if(isdigit(token[0]) || (token[0] == '.' && token.size() > 1))
         {
             // 数字
             output.push_back(token);
-        } 
-        else if (isalpha(token[0])) 
+        }
+        else if(isalpha(token[0]) || std::isdigit(token[0]))
         {
-            // 变量
+            // 变量（列名），在替换后应为数字
             output.push_back(token);
-        } 
-        else if (token == "(") 
+        }
+        else if(token == "(")
         {
             opStack.push('(');
-        } 
-        else if (token == ")") 
+        }
+        else if(token == ")")
         {
-            while (!opStack.empty() && opStack.top() != '(') 
+            while(!opStack.empty() && opStack.top() != '(')
             {
-                output.push_back(string(1, opStack.top()));
+                output.push_back(std::string(1, opStack.top()));
                 opStack.pop();
             }
-            opStack.pop(); // 弹出 '('
-        } 
-        else if (isOperator(token[0])) 
+            if(!opStack.empty()) opStack.pop(); // 弹出 '('
+        }
+        else if(isOperator(token[0]))
         {
-            while (!opStack.empty() && precedence(opStack.top()) >= precedence(token[0])) 
+            while(!opStack.empty() && precedence(opStack.top()) >= precedence(token[0]))
             {
                 output.push_back(string(1, opStack.top()));
                 opStack.pop();
@@ -75,7 +121,7 @@ vector<string> infixToPostfix(const string& expr)
             opStack.push(token[0]);
         }
     }
-    while (!opStack.empty()) 
+    while(!opStack.empty())
     {
         output.push_back(string(1, opStack.top()));
         opStack.pop();
@@ -124,6 +170,7 @@ void parseSet(const string& setClauses, vector<pair<string, string>>& setPairs, 
 void parseOn(const string& conditions, string& col1, string& col2);
 
 void parseWhere(const string& conditions, vector<pair<string, string>>& conditionPairs, string& logicalOperation, const vector<string>& columns) ;
+
 // 从文件加载表
 void miniDB::LoadAllTables(const string& path)
 {
@@ -398,7 +445,7 @@ void miniDB::SelectColumnsFromTable(const string& tableName, const vector<string
     }
 }
 
-
+// 从表中选择带有条件的数据
 void miniDB::SelectFromTableWithConditions(const std::string& tableName, const std::vector<std::string>& columns, const std::string& conditions, const std::string& outputFile)
 {
     if (tables.find(tableName) != tables.end()) 
@@ -538,8 +585,7 @@ void miniDB::SelectFromTableWithConditions(const std::string& tableName, const s
     }
 }
 
-// 更新表中的数据
-
+// INNER JOIN 两个表
 void miniDB::InnerJoin(const vector<string>& tableNames, const vector<string>& columns, const string& conditions, const string& outputFile)
 {
     if (tables.find(tableNames[0]) != tables.end() && tables.find(tableNames[1]) != tables.end()) 
@@ -633,6 +679,7 @@ void miniDB::InnerJoin(const vector<string>& tableNames, const vector<string>& c
     }
 }
 
+//删除表中的行
 void miniDB::Delete(const string& tableName, const string& conditions) 
 {
     if (tables.find(tableName) != tables.end()) 
@@ -705,6 +752,7 @@ void miniDB::Delete(const string& tableName, const string& conditions)
     }
 }
 
+//更新数据表
 void miniDB::UpdateTable(const string& tableName, const string setClauses, const string& conditions)
 {
     if (tables.find(tableName)!=tables.end())
@@ -796,8 +844,27 @@ void miniDB::UpdateTable(const string& tableName, const string setClauses, const
                     }
                     else
                     {
-                        vector<string> postfix=infixToPostfix(expr);
-                        double newValue = ::evaluatePostfix(postfix, variables);
+                        vector<string> tokens = splitExpression(expr);
+                        for (auto& token : tokens) 
+                        {
+                            if (isalpha(token[0])) 
+                            {
+                                if(variables.find(token)!=variables.end())
+                                    token = to_string(variables[token]);
+                            }
+                        }
+                        string newExpr;
+                        for(const auto& token : tokens)
+                        {
+                            newExpr += token;
+                            newExpr += " ";
+                        }
+                        if(!newExpr.empty()&&newExpr.back()==' ')
+                        {
+                            newExpr.pop_back();
+                        }
+                        vector<string> postfix=infixToPostfix(newExpr);
+                        double newValue = evaluatePostfix(postfix, variables);
                         row[colIndex]=to_string(newValue);
                         variables[col]=newValue;
                     }
@@ -807,6 +874,7 @@ void miniDB::UpdateTable(const string& tableName, const string setClauses, const
         table.saveToCSV(DBpath + tableName + ".csv");
     }
 }
+
 string removeSuffix(const string& str, const string& suffix) 
 {
     if (str.size() >= suffix.size() && str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0) 
@@ -1140,7 +1208,6 @@ void parseOn(const string& conditions, string& col1, string& col2)
         col2 = colB;
     }
 }
-
 
 void parseSet(const string& setClauses, vector<pair<string, string>>& setPairs, const vector<string>& columns, const vector<string>& columnTypes) 
 {
