@@ -10,3 +10,6 @@ The system is able to process commands in miniSQL and output the query results.
 
 ## 12.1 Final Version 1.0
 ### 所有功能均已实现
+
+## 12.3 Final Version 1.4
+### 增强了代码可读性，实现了新增功能

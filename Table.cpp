@@ -4,6 +4,7 @@
 #include <sstream>
 #include <iomanip>
 
+
 using namespace std;
 
 Table::Table(const string& name, const vector<string>& columns, const vector<string>& columnTypes)
