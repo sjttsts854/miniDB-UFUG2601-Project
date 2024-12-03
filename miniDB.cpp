@@ -16,7 +16,7 @@ bool FirstWrite = true;
 
 string DBpath;
 
-void parseCondition(const string& condition, const vector<vector<string>>& data);
+bool parseCondition(const Table& table,const vector<pair<string, string>>& conditionPairs, string logicalOperation, const vector<string>& row);
 
 bool isOperator(char c) 
 {
@@ -503,57 +503,8 @@ void miniDB::SelectFromTableWithConditions(const std::string& tableName, const s
         // 写入数据行
         for (const auto& row : table.data) 
         {
-            bool match = true;
-            for (size_t i = 0; i < conditionPairs.size(); ++i) 
-            {
-                const auto& condPair = conditionPairs[i];
-                auto it = find(table.columns.begin(), table.columns.end(), condPair.first);
-                if (it != table.columns.end()) 
-                {
-                    int index = distance(table.columns.begin(), it);
-                    string value = row[index];
-                    string condValue;
-                    if(condPair.second[0]!='!') condValue = condPair.second.substr(1);
-                    else condValue = condPair.second.substr(2);
-                    char op = condPair.second[0];
-                    bool conditionMatch = false;
 
-                    if (op == '>' && stof(value) > stof(condValue)) 
-                    {
-                        conditionMatch = true;
-                    } 
-                    else if (op == '<' && stof(value) < stof(condValue)) 
-                    {
-                        conditionMatch = true;
-                    } 
-                    else if (op == '=' && value == condValue) 
-                    {
-                        conditionMatch = true;
-                    }
-                    else if (op == '!' && value != condValue) 
-                    {
-                        conditionMatch = true;
-                    }
-
-                    if (i == 0) 
-                    {
-                        match = conditionMatch;
-                    } 
-                    else 
-                    {
-                        if (logicalOperation == "AND") 
-                        {
-                            match = match && conditionMatch;
-                        } 
-                        else if (logicalOperation == "OR") 
-                        {
-                            match = match || conditionMatch;
-                        }
-                    }
-                }
-            }
-
-            if (match) 
+            if (parseCondition(table, conditionPairs, logicalOperation, row)) 
             {
                 for (size_t i = 0; i < columnIndices.size(); ++i) 
                 {
@@ -780,60 +731,8 @@ void miniDB::UpdateTable(const string& tableName, const string setClauses, const
                     variables[table.columns[i]] = stod(row[i]);
                 }
             }
-
-            bool match = true;
-            if(!conditionPairs.empty())
-            {
-                for (size_t i = 0; i < conditionPairs.size(); ++i) 
-                {
-                    const auto& condPair = conditionPairs[i];
-                    auto it = find(table.columns.begin(), table.columns.end(), condPair.first);
-                    if (it != table.columns.end()) 
-                    {
-                        int index = distance(table.columns.begin(), it);
-                        string value = row[index];
-                        string condValue;
-                        if(condPair.second[0]!='!') condValue = condPair.second.substr(1);
-                        else condValue = condPair.second.substr(2);
-                        char op = condPair.second[0];
-                        bool conditionMatch = false;
-
-                        if (op == '>' && stof(value) > stof(condValue)) 
-                        {
-                            conditionMatch = true;
-                        } 
-                        else if (op == '<' && stof(value) < stof(condValue)) 
-                        {
-                            conditionMatch = true;
-                        } 
-                        else if (op == '=' && value == condValue) 
-                        {
-                            conditionMatch = true;
-                        }
-                        else if (op == '!' && value != condValue) 
-                        {
-                            conditionMatch = true;
-                        }
-
-                        if (i == 0) 
-                        {
-                            match = conditionMatch;
-                        } 
-                        else 
-                        {
-                            if (logicalOperation == "AND") 
-                            {
-                                match = match && conditionMatch;
-                            } 
-                            else if (logicalOperation == "OR") 
-                            {
-                                match = match || conditionMatch;
-                            }
-                        }
-                    }
-                }
-            }
-            if(match)
+            
+            if(parseCondition(table, conditionPairs, logicalOperation, row))
             {
                 for (const auto& setPair : setPairs)
                 {
@@ -1248,7 +1147,56 @@ void parseSet(const string& setClauses, vector<pair<string, string>>& setPairs, 
     }
 }
 
-void parseCondition(const string& condition, const vector<vector<string>>& data)
+bool parseCondition(const Table& table,const vector<pair<string, string>>& conditionPairs, string logicalOperation, const vector<string>& row)
 {
+    bool match = true;
+    for (size_t i = 0; i < conditionPairs.size(); ++i) 
+    {
+        const auto& condPair = conditionPairs[i];
+        auto it = find(table.columns.begin(), table.columns.end(), condPair.first);
+        if (it != table.columns.end()) 
+        {
+            int index = distance(table.columns.begin(), it);
+            string value = row[index];
+            string condValue;
+            if(condPair.second[0]!='!') condValue = condPair.second.substr(1);
+            else condValue = condPair.second.substr(2);
+            char op = condPair.second[0];
+            bool conditionMatch = false;
 
+            if (op == '>' && stof(value) > stof(condValue)) 
+            {
+                conditionMatch = true;
+            } 
+            else if (op == '<' && stof(value) < stof(condValue)) 
+            {
+                conditionMatch = true;
+            } 
+            else if (op == '=' && value == condValue) 
+            {
+                conditionMatch = true;
+            }
+            else if (op == '!' && value != condValue) 
+            {
+                conditionMatch = true;
+            }
+
+            if (i == 0) 
+            {
+                match = conditionMatch;
+            } 
+            else 
+            {
+                if (logicalOperation == "AND") 
+                {
+                    match = match && conditionMatch;
+                } 
+                else if (logicalOperation == "OR") 
+                {
+                    match = match || conditionMatch;
+                }
+            }
+        }
+    }
+    return match;
 }
