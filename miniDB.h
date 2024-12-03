@@ -46,7 +46,7 @@ public:
     void UpdateTable(const string& tableName, const string setClauses, const string& conditions);
 
     // INNER JOIN 两个表
-    void InnerJoin(const vector<string>& tableNames, const vector<string>& columns, const string& conditions, const string& outputFile);
+    void InnerJoin(const vector<string>& tableNames, const vector<string>& columns, const string& conditions, const string& Whereconditions, const string& outputFile);
     
     //删除表中数据
     void Delete(const string& tableName, const string& conditions);

@@ -539,7 +539,7 @@ void miniDB::SelectFromTableWithConditions(const std::string& tableName, const s
 }
 
 // INNER JOIN 两个表
-void miniDB::InnerJoin(const vector<string>& tableNames, const vector<string>& columns, const string& conditions, const string& outputFile)
+void miniDB::InnerJoin(const vector<string>& tableNames, const vector<string>& columns, const string& conditions, const string& Whereconditions, const string& outputFile)
 {
     if (tables.find(tableNames[0]) != tables.end() && tables.find(tableNames[1]) != tables.end()) 
     {
@@ -567,7 +567,9 @@ void miniDB::InnerJoin(const vector<string>& tableNames, const vector<string>& c
         parseOn(conditions, colA, colB);
         int indexA = distance(tableA.columns.begin(), find(tableA.columns.begin(), tableA.columns.end(), colA));
         int indexB = distance(tableB.columns.begin(), find(tableB.columns.begin(), tableB.columns.end(), colB));
-
+        vector<pair<string, string>> conditionPairs;
+        string logicalOperation;
+        parseWhere(Whereconditions, conditionPairs, logicalOperation, tableA.columns);
         // 打开输出文件
         ofstream file(outputFile, ios::out | ios::app);
         if (!file.is_open()) 
@@ -598,6 +600,10 @@ void miniDB::InnerJoin(const vector<string>& tableNames, const vector<string>& c
             {
                 if (rowA[indexA] == rowB[indexB]) 
                 {
+                    if(!conditions.empty())
+                    {
+                        if(!parseCondition(tableA, conditionPairs, logicalOperation, rowA))continue;
+                    }
                     if (tableA.columnTypes[columnIndicesA[0]] == "TEXT") 
                     {
                         file << rowA[columnIndicesA[0]];
@@ -880,12 +886,23 @@ void parseCommand(const string& command, miniDB& db, const string& outputFile)
                 }
                 string conditions;
                 size_t onPos = find(tokens.begin(), tokens.end(), "ON") - tokens.begin();
-                for (size_t i = onPos + 1; i < tokens.size(); ++i) 
+                for (size_t i = onPos + 1; i < wherePos; ++i) 
                 {
                     conditions += tokens[i];
                     conditions += " ";
                 }
-                db.InnerJoin(tableNames, columns, conditions, outputFile);
+                string Whereconditions;
+                for (size_t i = wherePos + 1; i < tokens.size(); ++i) 
+                {
+                    size_t dotPos = tokens[i].find(".");
+                    if(dotPos != string::npos)
+                    {
+                        tokens[i] = tokens[i].substr(dotPos + 1);
+                    }
+                    Whereconditions += tokens[i];
+                    Whereconditions += " ";
+                }
+                db.InnerJoin(tableNames, columns, conditions, Whereconditions, outputFile);
             }
             else if (fromPos != tokens.size()) 
             {
@@ -961,6 +978,11 @@ void parseCommand(const string& command, miniDB& db, const string& outputFile)
                 {
                     for (size_t i = wherePos + 1; i < tokens.size(); ++i) 
                     {
+                        size_t dotPos = tokens[i].find(".");
+                        if(dotPos != string::npos)
+                        {
+                            tokens[i] = tokens[i].substr(dotPos + 1);
+                        }
                         conditions += tokens[i];
                         conditions += " ";
                     }
