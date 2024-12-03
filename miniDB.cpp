@@ -454,25 +454,38 @@ void miniDB::SelectFromTableWithConditions(const std::string& tableName, const s
     {
         const Table& table = tables[tableName];
         vector<int> columnIndices;
-        for (const auto& col : columns) 
+        if (columns.empty()) 
         {
-            auto it = find(table.columns.begin(), table.columns.end(), col);
-            if (it != table.columns.end()) 
+            // 如果没有指定列，则选择所有列
+            for (size_t i = 0; i < table.columns.size(); ++i) 
             {
-                columnIndices.push_back(distance(table.columns.begin(), it));
-            } 
-            else 
+                columnIndices.push_back(i);
+            }
+        } 
+        else 
+        {
+            for (const auto& col : columns) 
             {
-                cout << "Column " << col << " does not exist in table " << tableName << endl;
-                return;
+                auto it = find(table.columns.begin(), table.columns.end(), col);
+                if (it != table.columns.end()) 
+                {
+                    columnIndices.push_back(distance(table.columns.begin(), it));
+                } 
+                else 
+                {
+                    cout << "Column " << col << " does not exist in table " << tableName << endl;
+                    return;
+                }
             }
         }
 
         // 解析条件
         vector<pair<string, string>> conditionPairs;
         string logicalOperation;
-
+        if(!columns.empty())
         parseWhere(conditions, conditionPairs, logicalOperation, columns);
+        else
+        parseWhere(conditions, conditionPairs, logicalOperation, table.columns);
 
         // 打开输出文件
         ofstream file(outputFile, ios::out | ios::app);
@@ -490,16 +503,15 @@ void miniDB::SelectFromTableWithConditions(const std::string& tableName, const s
         FirstWrite = false;
 
         // 写入列名
-        for (size_t i = 0; i < columns.size(); ++i) 
+        for (size_t i = 0; i < columnIndices.size(); ++i) 
         {
-            file << columns[i];
-            if (i < columns.size() - 1) 
+            file << table.columns[columnIndices[i]];
+            if (i < columnIndices.size() - 1) 
             {
                 file << ",";
             }
         }
         file << endl;
-
         // 写入数据行
         for (const auto& row : table.data) 
         {
