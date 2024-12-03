@@ -16,6 +16,8 @@ bool FirstWrite = true;
 
 string DBpath;
 
+void parseCondition(const string& condition, const vector<vector<string>>& data);
+
 bool isOperator(char c) 
 {
     return c == '+' || c == '-' || c == '*' || c == '/';
@@ -631,7 +633,7 @@ void miniDB::InnerJoin(const vector<string>& tableNames, const vector<string>& c
 
         for (size_t i = 0; i < columns.size(); ++i) 
         {
-            file << columns[i];
+            file << tableNames[i] <<"."<<columns[i];
             if (i < columns.size() - 1) 
             {
                 file << ",";
@@ -1244,4 +1246,9 @@ void parseSet(const string& setClauses, vector<pair<string, string>>& setPairs, 
             cerr << "Column " << colName << " does not exist." << endl;
         }
     }
+}
+
+void parseCondition(const string& condition, const vector<vector<string>>& data)
+{
+
 }
