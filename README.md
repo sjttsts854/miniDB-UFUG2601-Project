@@ -13,3 +13,6 @@ The system is able to process commands in miniSQL and output the query results.
 
 ## 12.3 Final Version 1.4
 ### 增强了代码可读性，实现了新增功能
+
+## 功能说明
+### 此minidb支持除WHERE子句复杂表达式与INNERJOIN多个表的所有功能

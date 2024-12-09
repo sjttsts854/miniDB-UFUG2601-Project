@@ -1,2 +1,0 @@
-g++ -o minidb miniDB.cpp Table.cpp main.cpp
-./minidb input.sql output.txt

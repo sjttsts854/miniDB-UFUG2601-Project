@@ -41,10 +41,12 @@ int main(int argc, char* argv[])
         }
 
         command += line + " ";
-        if (line.find(';') != string::npos) 
+        while (command.find(';') != string::npos)
         {
-            parseCommand(command, db, outputFile);
-            command.clear();
+            size_t pos = command.find(';');
+            string sub = command.substr(0, pos);
+            parseCommand(sub, db, outputFile);
+            command = command.substr(pos + 1);
         }
     }
 
